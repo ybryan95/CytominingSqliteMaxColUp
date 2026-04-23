@@ -80,43 +80,82 @@ task profiling {
     echo "ls -lh ."
     ls -lh .
 
-    echo "===================================="
-    echo "= Processing CSV files to limit columns to 2000 ="
-    echo "===================================="
-  
-    find /cromwell_root/data -type f -name "*.csv" | while read -r file; do
-      column_count=$(head -1 "$file" | sed 's/[^,]//g' | wc -c)
-      if [ "$column_count" -gt 1999 ]; then
-        filename=$(basename "$file" .csv)
-        delimiter="|${filename}_"
-        echo "Processing $file with $column_count columns using delimiter $delimiter"
-        awk -F, -v OFS=, -v delim="$delimiter" '{
-          if (NR == 1) {
-            for (i=1; i<=1998; i++) {
-              header[i] = $i
-            }
-            header[1999] = ""
-            for (i=1999; i<=NF; i++) {
-              header[1999] = header[1999] (header[1999] ? delim : "") $i
-            }
-            for (i=1; i<=1999; i++) {
-              printf header[i] (i==1999 ? "\n" : ",")
-            }
-          } else {
-            for (i=1; i<=1998; i++) {
-              row[i] = $i
-            }
-            row[1999] = ""
-            for (i=1999; i<=NF; i++) {
-              row[1999] = row[1999] (row[1999] ? delim : "") $i
-            }
-            for (i=1; i<=1999; i++) {
-              printf row[i] (i==1999 ? "\n" : ",")
-            }
-          }
-        }' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
-      fi
+    echo "===========BEGIN DOCKER SQLITE MODIFICATION BEGIN=============="
+    #Edit starts here-------------------------------
+    sqlite3 --version
+    echo "which sqlite3======"
+    which sqlite3 
+    #output- /usr/bin/sqlite3
+    echo "whereis sqlite3====="
+    whereis sqlite3
+    #output- sqlite3: /usr/bin/sqlite3 /usr/include/sqlite3.h /usr/share/man/man1/sqlite3.1.gz
+
+    initial_dir=$(pwd)
+    echo "Current directory is: $initial_dir"
+    #output- /cromwell_root
+    ls -lh .
+
+    # Search for all directories named 'pycytominer' and echo them
+    all_pycytominer_dirs=$(find / -type d -name 'pycytominer' 2>/dev/null)
+    echo "All found pycytominer directories:"
+    for dir in $all_pycytominer_dirs; 
+    do 
+      echo "$dir"; 
     done
+
+    all_sqlite_dirs=$(find / -type d -name 'sqlite' 2>/dev/null)
+    echo "All found sqlite directories:"
+    for dir in $all_sqlite_dirs; 
+    do 
+      echo "$dir"; 
+    done
+
+    #output /usr/local/lib/python3.7/site-packages/sqlalchemy/dialects/sqlite
+
+    pycytominer_dir=$(find / -type d -name 'pycytominer' 2>/dev/null | head -n 1)
+    if [ -n "$pycytominer_dir" ]; then
+        echo "Found 'pycytominer' directory at: $pycytominer_dir"
+        cd "$pycytominer_dir"
+    else
+        echo "'pycytominer' directory not found. Continuing in the current directory."
+    fi
+
+    #output /usr/local/lib/python3.7/site-packages/pycytominer- there is only one
+
+    git clone https://github.com/sqlite/sqlite.git
+    sed -i "s/SQLITE_MAX_COLUMN 2000/SQLITE_MAX_COLUMN 10000/" sqlite/src/sqliteLimit.h
+    mkdir bld
+    cd bld
+    ../sqlite/configure SQLITE_MAX_COLUMN=10000
+    make install
+    apt -y remove sqlite3
+    export PATH=/usr/local/bin:$PATH
+    hash -r
+    sqlite3 --version
+    
+
+    echo "grep -ri SQLITE_MAX_COLUMN====="
+    grep -ri SQLITE_MAX_COLUMN
+    cd "$initial_dir"
+
+    echo "which sqlite3====="
+    which sqlite3
+
+    echo "whereis sqlite3======"
+    whereis sqlite3
+
+
+
+
+
+    cd $initial_dir
+    echo "pip show cytominer-database======"
+    pip show cytominer-database
+
+    echo "export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH"
+    export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+    echo "===========END DOCKER SQLITE MODIFICATION END=============="
+    #Edit ends here-----------------------------------
 
 
     # display for log
